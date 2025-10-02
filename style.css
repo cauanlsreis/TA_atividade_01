@@ -1,0 +1,68 @@
+/* Estilos gerais */
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 20px;
+  background-color: #f0f0f0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+/* Informações do jogador */
+.player-info {
+  background: white;
+  padding: 15px;
+  margin: 10px 0;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.player-info h2 {
+  margin-top: 0;
+  color: #333;
+}
+
+/* Container do campo */
+.field-container {
+  text-align: center;
+  margin: 20px 0;
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Canvas do campo */
+#campo {
+  border: 2px solid #333;
+  background-color: #2d8f2d;
+  border-radius: 4px;
+}
+
+/* Legenda */
+.legend {
+  margin-top: 15px;
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-box {
+  width: 20px;
+  height: 20px;
+  border: 1px solid #333;
+  border-radius: 3px;
+}
+
+.low { background-color: rgba(255, 255, 0, 0.7); }
+.medium { background-color: rgba(255, 165, 0, 0.7); }
+.high { background-color: rgba(255, 0, 0, 0.7); }

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Monitor Jogador - Mapa de Calor</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>Monitor de Jogadores - Mapa de Calor</h1>
+    
+    <div class="player-info">
+      <h2>Jogador: <span id="playerId">Conectando...</span></h2>
+      <p>BPM: <span id="bpm">--</span></p>
+      <p>Velocidade: <span id="vel">--</span> km/h</p>
+      <p>Posição: (<span id="x">--</span>, <span id="y">--</span>)</p>
+    </div>
+    
+    <div class="field-container">
+      <canvas id="campo" width="800" height="500"></canvas>
+      <div class="legend">
+        <div class="legend-item">
+          <div class="color-box low"></div>
+          <span>Baixa</span>
+        </div>
+        <div class="legend-item">
+          <div class="color-box medium"></div>
+          <span>Média</span>
+        </div>
+        <div class="legend-item">
+          <div class="color-box high"></div>
+          <span>Alta</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const socket = io("http://localhost:3000");
+    const canvas = document.getElementById('campo');
+    const ctx = canvas.getContext('2d');
+    
+    let playerId = null;
+    let allPlayersData = new Map();
+    let heatmapData = new Map();
+    let playerColors = new Map();
+    
+    const FIELD_WIDTH = 800;
+    const FIELD_HEIGHT = 500;
+    
+    // Função para gerar cores aleatórias
+    function generateRandomColor() {
+      const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8E8', '#F7DC6F', '#BB8FCE', '#85C1E9'];
+      return colors[Math.floor(Math.random() * colors.length)];
+    }
+    
+    // Conecta e solicita um ID único
+    socket.emit('requestPlayerId');
+    
+    socket.on('playerIdAssigned', (id) => {
+      playerId = id;
+      document.getElementById('playerId').textContent = id;
+    });
+    
+    socket.on('playerDisconnected', (disconnectedPlayerId) => {
+      allPlayersData.delete(disconnectedPlayerId);
+      heatmapData.delete(disconnectedPlayerId);
+      playerColors.delete(disconnectedPlayerId);
+      drawField();
+    });
+    
+    socket.on('dadosJogador', (data) => {
+      // Atualiza dados do próprio jogador
+      if (data.id === playerId) {
+        document.getElementById('bpm').textContent = data.bpm;
+        document.getElementById('vel').textContent = data.velocidade;
+        document.getElementById('x').textContent = data.posicao.x;
+        document.getElementById('y').textContent = data.posicao.y;
+      }
+      
+      // Armazena dados para o mapa de calor
+      allPlayersData.set(data.id, data);
+      
+      // Gera cor aleatória para novos jogadores
+      if (!playerColors.has(data.id)) {
+        playerColors.set(data.id, generateRandomColor());
+      }
+      
+      if (!heatmapData.has(data.id)) {
+        heatmapData.set(data.id, []);
+      }
+      
+      const playerHistory = heatmapData.get(data.id);
+      playerHistory.push({
+        x: data.posicao.x,
+        y: data.posicao.y,
+        intensity: Math.min(data.velocidade * 2 + data.bpm / 10, 100)
+      });
+      
+      // Mantém apenas os últimos 30 pontos
+      if (playerHistory.length > 30) {
+        playerHistory.shift();
+      }
+      
+      drawField();
+    });
+    
+    function drawField() {
+      ctx.clearRect(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
+      drawSoccerField();
+      drawHeatmap();
+      drawCurrentPositions();
+    }
+    
+    function drawSoccerField() {
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3;
+      
+      // Contorno do campo
+      ctx.strokeRect(10, 10, FIELD_WIDTH - 20, FIELD_HEIGHT - 20);
+      
+      // Linha do meio
+      ctx.beginPath();
+      ctx.moveTo(FIELD_WIDTH / 2, 10);
+      ctx.lineTo(FIELD_WIDTH / 2, FIELD_HEIGHT - 10);
+      ctx.stroke();
+      
+      // Círculo central
+      ctx.beginPath();
+      ctx.arc(FIELD_WIDTH / 2, FIELD_HEIGHT / 2, 60, 0, 2 * Math.PI);
+      ctx.stroke();
+      
+      // Áreas do goleiro
+      ctx.strokeRect(10, FIELD_HEIGHT / 2 - 60, 80, 120);
+      ctx.strokeRect(10, FIELD_HEIGHT / 2 - 30, 30, 60);
+      ctx.strokeRect(FIELD_WIDTH - 90, FIELD_HEIGHT / 2 - 60, 80, 120);
+      ctx.strokeRect(FIELD_WIDTH - 40, FIELD_HEIGHT / 2 - 30, 30, 60);
+    }
+    
+    function drawHeatmap() {
+      heatmapData.forEach((playerHistory) => {
+        playerHistory.forEach((point, index) => {
+          const canvasX = (point.x / 100) * (FIELD_WIDTH - 40) + 20;
+          const canvasY = (point.y / 100) * (FIELD_HEIGHT - 40) + 20;
+          const intensity = point.intensity / 100;
+          const alpha = 0.4 * (1 - (playerHistory.length - index) / playerHistory.length * 0.5);
+          
+          const color = intensity < 0.3 ? `rgba(255, 255, 0, ${alpha})` : 
+                       intensity < 0.7 ? `rgba(255, 165, 0, ${alpha})` : 
+                       `rgba(255, 0, 0, ${alpha})`;
+          
+          const gradient = ctx.createRadialGradient(canvasX, canvasY, 0, canvasX, canvasY, 15 + intensity * 10);
+          gradient.addColorStop(0, color);
+          gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+          
+          ctx.save();
+          ctx.globalCompositeOperation = 'multiply';
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.arc(canvasX, canvasY, 15 + intensity * 10, 0, 2 * Math.PI);
+          ctx.fill();
+          ctx.restore();
+        });
+      });
+    }
+    
+    function drawCurrentPositions() {
+      allPlayersData.forEach((playerData, id) => {
+        const canvasX = (playerData.posicao.x / 100) * (FIELD_WIDTH - 40) + 20;
+        const canvasY = (playerData.posicao.y / 100) * (FIELD_HEIGHT - 40) + 20;
+        const isCurrentPlayer = id === playerId;
+        
+        ctx.save();
+        ctx.fillStyle = isCurrentPlayer ? '#000000' : playerColors.get(id);
+        ctx.strokeStyle = isCurrentPlayer ? playerColors.get(id) : '#000000';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(canvasX, canvasY, 6, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      });
+    }
+    
+    drawField();
+  </script>
+</body>
+</html>
